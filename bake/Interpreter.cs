@@ -21,12 +21,28 @@ namespace bake
             var parser = new Parser();
             parser.Initialize(tokens, lexer);
             var recipe = parser.Recipe();
+            var printer = new Printer();
+            var result = printer.Print(recipe);
+            return result;
+      }
 
-            string ingredientList = string.Join(System.Environment.NewLine, recipe.Ingredients.Select(kvp => $"{kvp.Value}{kvp.Key.UnitString} {kvp.Key.Name}."));
+        private class PrintContext
+        {
+            public string LastMentionedContainer { get; set; }
+        }
 
-            string method = string.Join(System.Environment.NewLine, recipe.Instructions.Select((i,x) => $"{x+1}. " + i.Describe()));
+        private class Printer
+        {
+            public string Print(Recipe recipe)
+            {
 
-            var result = $@"{recipe.Name}
+                string ingredientList = string.Join(System.Environment.NewLine, recipe.Ingredients.Select(kvp => $"{kvp.Value}{kvp.Key.UnitString} {kvp.Key.Name}."));
+
+                var context = new PrintContext();
+
+                string method = string.Join(System.Environment.NewLine, recipe.Instructions.Select((i, x) => $"{x + 1}. " + i.Describe(context)));
+
+                var result = $@"{recipe.Name}
 
 Ingredients:
 
@@ -37,12 +53,14 @@ Method:
 {method}
 ";
 
-            return result;
+                return result;
+
+            }
         }
 
         private abstract class Instruction
         {
-            public abstract string Describe();
+            public abstract string Describe(PrintContext context);
 
             protected string ArticleFor(string noun)
             {
@@ -60,10 +78,12 @@ Method:
             public ProcessIngredientsInstruction(string processName, Container ingredients)
             {
                 this.ProcessName = processName;
-                this.Ingredients = ingredients;
+                this.Ingredients = new Container(ingredients.Name);
+                this.Ingredients.AddRange(ingredients);
+                ingredients.Clear();
             }
 
-            public override string Describe()
+            public override string Describe(PrintContext context)
             {
                 var ingredientList = this.Ingredients
                     .Select(ingredient => $"{ingredient.Amount}{ingredient.IngredientType.UnitString} {ingredient.IngredientType.Name}")
@@ -76,11 +96,16 @@ Method:
                 {
                     words.Add(Humanizer.CollectionHumanizeExtensions.Humanize(ingredientList));
                 }
-                
-                words.Add("in");
-                words.Add(this.ArticleFor(this.Ingredients.Name));
-                words.Add(this.Ingredients.Name);
-             
+
+
+                if (context.LastMentionedContainer != this.Ingredients.Name)
+                {
+                    words.Add("in");
+                    words.Add(this.ArticleFor(this.Ingredients.Name));
+                    words.Add(this.Ingredients.Name);
+                    context.LastMentionedContainer = this.Ingredients.Name;
+                }
+
                 words[0] = words[0].Titleize();
                 var msg = string.Join(" ", words) + ".";
 
@@ -145,6 +170,7 @@ Method:
             }
         }
 
+        /*
         private class StackParser
         {
             public event EventHandler<InstructionEventArgs> Instruction;
@@ -224,7 +250,7 @@ Method:
             }
         }
 
-
+    */
         private class Recipe
         {
             public string Name { get; set; }
@@ -240,14 +266,13 @@ Method:
             public int Amount { get; set; }
         }
 
-        private class Container: Stack<IngredientAmount>
+        private class Container: List<IngredientAmount>
         {
             public string Name { get; set;  }
             public Container(string name)
             {
                 this.Name = name;
             }
-
         }
 
         private class Parser : ParserBase
@@ -371,7 +396,7 @@ Method:
                     IngredientType = ingredientType
                 };
 
-                this.currentIngredients.Push(ingredientAmount);
+                this.currentIngredients.Add(ingredientAmount);
                 
                 int currentAmount = 0;
                 if (this.recipe.Ingredients.TryGetValue(ingredientType, out currentAmount))
