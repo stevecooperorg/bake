@@ -63,20 +63,8 @@ namespace bake.tests
 
             var directions = test.Recipe;
             var expected = test.Expected;
-            var result = this.interpreter.Interpret(larder, directions).Trim();
-            Console.WriteLine("--------------- result");
-            Console.WriteLine("");
-            Console.WriteLine(result);
-            Console.WriteLine("");
-            Console.WriteLine("result ------ expected");
-            Console.WriteLine("");
-            Console.WriteLine(expected);
-            Console.WriteLine("");
-            Console.WriteLine("expected -------------");
-            Console.WriteLine("");
-            Console.WriteLine("");
-
-            Assert.AreEqual(expected, result);
+            var actual = this.interpreter.Interpret(larder, directions).Trim();
+            actual.HaveTrimmedContent(expected);
         }
     }
 }
