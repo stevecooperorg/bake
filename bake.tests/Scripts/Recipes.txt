@@ -1,0 +1,37 @@
+﻿CARAMEL-SAUCE .pan 75Butt 100LbSu 50GoSy heat stir remove-from-heat 125DblC 3Salt stir-in
+-------
+CARAMEL SAUCE
+
+Ingredients:
+
+75g softened unsalted butter.
+100g light brown sugar.
+50g golden syrup.
+125ml double cream.
+3g table salt.
+
+Method:
+
+1. Heat 75g softened unsalted butter, 100g light brown sugar, and 50g golden syrup in a pan.
+2. Stir.
+3. Remove from heat.
+4. Stir in 125ml double cream and 3g table salt.
+-------
+SPONGE-CAKE .bowl 250CaSu 250Butt cream [1Egg mix-in] repeat 5 250SRFl fold .oven bake
+-------
+SPONGE CAKE
+
+Ingredients:
+
+250g castor sugar.
+250g softened unsalted butter.
+1 medium egg.
+250g self raising flour.
+
+Method:
+
+1. Cream 250g softened unsalted butter and 250g castor sugar in a bowl.
+2. Mix in 1 medium egg.
+3. Repeat step 2 another 4 times.
+4. Fold in 250g self raising flour.
+5. Bake in an oven.
