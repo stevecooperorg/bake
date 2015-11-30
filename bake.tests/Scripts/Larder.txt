@@ -11,6 +11,7 @@
 (Curr - currants, g)
 (DblC - double cream, ml)
 (Egg  - medium egg, 1)
+(FCol - food colour, drop)
 (FlAl - flaked almonds, g)
 (GoSy - golden syrup, g)
 (GrAl - ground almonds, g)

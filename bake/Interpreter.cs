@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Humanizer;
 using System.Diagnostics;
+using System.Collections.ObjectModel;
 
 namespace bake
 {
@@ -28,7 +29,26 @@ namespace bake
 
         private class PrintContext
         {
+            private StringBuilder sb = new StringBuilder();
+            public int StepNumber { get; private set; } = 1; 
+
             public string LastMentionedContainer { get; set; }
+
+            public void WriteStep(string message)
+            {
+                sb
+                    .Append(StepNumber.ToString(CultureInfo.GetCultureInfo("en-GB")))
+                    .Append(@". ")
+                    .Append(message)
+                    .AppendLine();
+
+                StepNumber++;
+            }
+
+            public override string ToString()
+            {
+                return sb.ToString();
+            }
         }
 
         private class Printer
@@ -40,7 +60,12 @@ namespace bake
 
                 var context = new PrintContext();
 
-                string method = string.Join(System.Environment.NewLine, recipe.Instructions.Select((i, x) => $"{x + 1}. " + i.Describe(context)));
+                foreach(var instruction in recipe.Instructions)
+                {
+                    instruction.Describe(context);
+                }
+
+                string method = context.ToString();
 
                 var result = $@"{recipe.Name}
 
@@ -60,13 +85,47 @@ Method:
 
         private abstract class Instruction
         {
-            public abstract string Describe(PrintContext context);
+            public abstract void Describe(PrintContext context);
 
             protected string ArticleFor(string noun)
             {
                 return new[] { 'a', 'e', 'i', 'o', 'u' }.Contains(noun[0])
                     ? "an"
                     : "a";
+            }
+        }
+
+        private class RepeatOperationsInstruction : Instruction
+        {
+            public InstructionCollection Instructions { get; private set; }
+            public int Times { get; set; }
+
+
+            public RepeatOperationsInstruction(InstructionCollection instructions)
+            {
+                this.Instructions = instructions;
+            }
+
+            public override void Describe(PrintContext context)
+            {
+                var startStep = context.StepNumber ;
+                foreach (var instruction in Instructions)
+                {
+                    instruction.Describe(context);
+                }
+                var endStep = context.StepNumber-1;
+                if (Times > 1)
+                {
+                    if (startStep == endStep)
+                    {
+                        context.WriteStep
+                            ($"Repeat step {startStep} another {Times - 1} times.");
+                    }
+                    else
+                    {
+                        context.WriteStep($"Repeat step {startStep} to {endStep} another {Times - 1} times.");
+                    }
+                }
             }
         }
 
@@ -83,7 +142,7 @@ Method:
                 ingredients.Clear();
             }
 
-            public override string Describe(PrintContext context)
+            public override void Describe(PrintContext context)
             {
                 var ingredientList = this.Ingredients
                     .Select(ingredient => $"{ingredient.Amount}{ingredient.IngredientType.UnitString} {ingredient.IngredientType.Name}")
@@ -109,8 +168,7 @@ Method:
                 words[0] = words[0].Titleize();
                 var msg = string.Join(" ", words) + ".";
 
-                return msg;
-
+                context.WriteStep(msg);
             }
         }
 
@@ -169,94 +227,13 @@ Method:
                 this.Message = message;
             }
         }
-
-        /*
-        private class StackParser
-        {
-            public event EventHandler<InstructionEventArgs> Instruction;
-            private readonly Dictionary<string, IngredientType> ingredients;
-
-            public StackParser(Dictionary<string, IngredientType> ingredients)
-            {
-                this.ingredients = ingredients;
-            }
-
-            private void OnInstruction(string message)
-            {
-                if (Instruction != null)
-                {
-                    Instruction(this, new InstructionEventArgs(message));
-                }
-            }
-
-            public Stack<Token> Tokens { get; } = new Stack<Token>();
-
-            public void Push(Token t)
-            {
-                Tokens.Push(t);
-                if (t.Is(Lexer.Identifier))
-                {
-                    Tokens.Pop();
-                    var ingredientList = new List<string>();
-                    while(!Empty && Tokens.Peek().Is(Lexer.Ingredient))
-                    {
-                        var ingredient = Tokens.Pop().Content;
-
-                        var digits = Regex.Match(ingredient, @"^\d+").Groups[0].Value;
-                        var amount = int.Parse(digits, CultureInfo.GetCultureInfo("en-GB"));
-                        var code = ingredient.Substring(digits.Length);
-                        var ingredientType = this.ingredients[code];
-                        var x = $"{amount}{ingredientType.UnitString} {ingredientType.Name}";
-                        ingredientList.Add(x);
-                    }
-
-                    var words = new List<string>();
-
-                    words.AddRange(t.Content.Split('-'));
-                    if (ingredientList.Count > 0)
-                    {
-                        words.Add(Humanizer.CollectionHumanizeExtensions.Humanize(ingredientList));
-                    }
-
-
-                    if (!Empty && LA1.Is(Lexer.Container))
-                    {
-                        var container = this.Tokens.Pop();
-                        words.Add("in");
-                        words.Add("a");
-                        words.Add(container.Content.Substring(1));
-                    }
-                    words[0] = words[0].Titleize();
-                    var msg = string.Join(" ", words) + ".";
-
-                    OnInstruction(msg);
-                }
-            }
-
-            private Token LA1
-            {
-                get
-                {
-                    return Empty ? null : this.Tokens.Peek();
-                }
-            }
-
-            private bool Empty
-            {
-                get
-                {
-                    return this.Tokens.Count == 0;
-                }
-            }
-        }
-
-    */
+        
         private class Recipe
         {
             public string Name { get; set; }
             public Dictionary<IngredientType, int> Ingredients { get; } = new Dictionary<IngredientType, int>();
 
-            public List<Instruction> Instructions { get; } = new List<Instruction>();
+            public InstructionCollection Instructions { get; } = new InstructionCollection();
 
         }
 
@@ -275,10 +252,20 @@ Method:
             }
         }
 
+        private class InstructionCollection: Collection<Instruction>
+        {
+
+        }
+
         private class Parser : ParserBase
         {
             public Dictionary<string, IngredientType> IngredientTypes { get; } = new Dictionary<string, IngredientType>();
-           
+            public CultureInfo Culture { get; } = CultureInfo.GetCultureInfo("en-GB");
+
+            private Stack<InstructionCollection> instructionStack;
+
+            public InstructionCollection Instructions {  get { return instructionStack.Peek(); } }
+
             private Recipe recipe;
 
             private Container currentIngredients;
@@ -286,7 +273,10 @@ Method:
             public Recipe Recipe()
             {
                 this.recipe = new Interpreter.Recipe();
+                this.instructionStack = new Stack<InstructionCollection>();
+                this.instructionStack.Push(this.recipe.Instructions);
 
+                // the larder; defines the standard 'library' of ingredients 
                 while (!EOF && this.LA1.Is(Lexer.OpParen))
                 {
                     IngredientDefinition();
@@ -299,7 +289,7 @@ Method:
                 {
                     if (this.LA1.Is(Lexer.Container))
                     {
-                        Stage();
+                        Step();
                     }
                     else
                     {
@@ -338,14 +328,14 @@ Method:
                 this.IngredientTypes.Add(item.Code, item);
             }
 
-            private void Stage()
+            private void Step()
             {
                 Container();
 
-                StageDetails();
+                StepDetails();
             }
 
-            private void StageDetails()
+            private void StepDetails()
             {
                 while(!EOF && this.LA1.IsOneOf(Lexer.Ingredient, Lexer.Identifier, Lexer.Op))
                 {
@@ -372,7 +362,7 @@ Method:
             {
                 var process = this.Match(Lexer.Identifier).Content;
                 var instr = new ProcessIngredientsInstruction(process, this.currentIngredients);
-                this.recipe.Instructions.Add(instr);
+                this.Instructions.Add(instr);
             }
             
             
@@ -381,7 +371,7 @@ Method:
             {
                 var ingredient = this.Match(Lexer.Ingredient).Content;
                 var digits = Regex.Match(ingredient, @"^\d+").Groups[0].Value;
-                var amount = int.Parse(digits, CultureInfo.GetCultureInfo("en-GB"));
+                var amount = int.Parse(digits, this.Culture);
                 var code = ingredient.Substring(digits.Length);
 
                 IngredientType ingredientType;
@@ -414,15 +404,25 @@ Method:
             private void QuotedProgram()
             {
                 Match(Lexer.Op);
+
+               
+                var program = new InstructionCollection();
+                this.instructionStack.Push(program);
+
                 while (!LA1.Is(Lexer.Cl))
                 {
-                    this.StageDetails();
+                    this.StepDetails();
                 }
+                this.instructionStack.Pop();
+                
                 Match(Lexer.Cl);
                 Match(Lexer.Repeat);
                 var digits = this.Match(Lexer.Digit).Content;
-                var number = int.Parse(digits, CultureInfo.GetCultureInfo("en-GB"));
-                //this.recipe.Instructions.Add($"(repeat {number} times)");
+                var number = int.Parse(digits, this.Culture);
+
+                var repeater = new RepeatOperationsInstruction(program) { Times = number };
+
+                this.Instructions.Add(repeater);
             }
 
             private void Container()
