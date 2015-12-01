@@ -1,4 +1,4 @@
-﻿MACARONS .bowl 100IcSu 60GrAl blitz .secondbowl 2Whit whisk-to-stiff-peaks [5CaSu whisk] repeat 20 1FCol fold-in
+﻿MACARONS .bowl 100IcSu 60GrAl blitz .secondbowl 2Whit whisk-to-stiff-peaks [5CaSu 0.5VaEx whisk] repeat 20 1FCol [0.5bowl fold-in] repeat 2
 -------
 MACARONS
 
@@ -21,10 +21,10 @@ CARAMEL SAUCE
 
 Ingredients:
 
-75g softened unsalted butter.
-100g light brown sugar.
-50g golden syrup.
 125ml double cream.
+100g light brown sugar.
+75g softened unsalted butter.
+50g golden syrup.
 3g table salt.
 
 Method:
@@ -41,9 +41,9 @@ SPONGE CAKE
 Ingredients:
 
 250g castor sugar.
-250g softened unsalted butter.
-1 medium egg.
 250g self raising flour.
+250g softened unsalted butter.
+5 medium eggs.
 
 Method:
 

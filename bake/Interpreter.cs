@@ -33,7 +33,7 @@ namespace bake
             public int StepNumber { get; private set; } = 1; 
 
             public string LastMentionedContainer { get; set; }
-
+            
             public void WriteStep(string message)
             {
                 sb
@@ -55,8 +55,14 @@ namespace bake
         {
             public string Print(Recipe recipe)
             {
-
-                string ingredientList = string.Join(System.Environment.NewLine, recipe.Ingredients.Select(kvp => $"{kvp.Value}{kvp.Key.UnitString} {kvp.Key.Name}."));
+                var ingredients = recipe.Ingredients
+                    .Select(kvp => new IngredientAmount { Amount = kvp.Value, IngredientType=kvp.Key })
+                    .ToList();
+                ingredients.Sort();
+                
+                string ingredientList = string.Join(
+                    System.Environment.NewLine, 
+                    ingredients.Select(ing => ing.ToString() + "."));
 
                 var context = new PrintContext();
 
@@ -108,7 +114,7 @@ Method:
 
             public override void Describe(PrintContext context)
             {
-                var startStep = context.StepNumber ;
+                var startStep = context.StepNumber;
                 foreach (var instruction in Instructions)
                 {
                     instruction.Describe(context);
@@ -118,12 +124,11 @@ Method:
                 {
                     if (startStep == endStep)
                     {
-                        context.WriteStep
-                            ($"Repeat step {startStep} another {Times - 1} times.");
+                        context.WriteStep($"Repeat step {startStep} another {Times - 1} times.");
                     }
                     else
                     {
-                        context.WriteStep($"Repeat step {startStep} to {endStep} another {Times - 1} times.");
+                        context.WriteStep($"Repeat step {startStep} to step {endStep} another {Times - 1} times.");
                     }
                 }
             }
@@ -145,7 +150,7 @@ Method:
             public override void Describe(PrintContext context)
             {
                 var ingredientList = this.Ingredients
-                    .Select(ingredient => $"{ingredient.Amount}{ingredient.IngredientType.UnitString} {ingredient.IngredientType.Name}")
+                    .Select(ingredient => $"{ingredient.Amount.AsFraction()}{ingredient.IngredientType.UnitString} {ingredient.IngredientType.Name}")
                     .ToList();
                 
                 var words = new List<string>();
@@ -182,12 +187,14 @@ Method:
             public static readonly int Identifier = Lexer.NextTokenType();
             public static readonly int Dash = Lexer.NextTokenType();
             public static readonly int Comma = Lexer.NextTokenType();
-            public static readonly int Digit = Lexer.NextTokenType();
+            public static readonly int Number = Lexer.NextTokenType();
             public static readonly int Op = Lexer.NextTokenType();
             public static readonly int OpParen = Lexer.NextTokenType();
             public static readonly int Cl = Lexer.NextTokenType();
             public static readonly int ClParen = Lexer.NextTokenType();
             public static readonly int WS = Lexer.NextIgnoredTokenType();
+
+            public const string NumberFragmentRx = @"\d+(\.\d+)?";
 
             public Lexer(string content): base(content)
             {
@@ -199,8 +206,8 @@ Method:
                 this.AddLiteral(OpParen, "(");
                 this.AddLiteral(Cl, "]");
                 this.AddLiteral(ClParen, ")");
-                this.AddPattern(Ingredient, @"\d+[A-Za-z]+", nameof(Ingredient));
-                this.AddPattern(Digit, @"\d+", nameof(Digit));
+                this.AddPattern(Ingredient, NumberFragmentRx + @"[A-Za-z]+", nameof(Ingredient));
+                this.AddPattern(Number, @"\d+", nameof(Number));
                 this.AddPattern(WS, @"\s+", nameof(WS));
                 this.AddPattern(Identifier, @"[A-Za-z][A-Za-z0-9-]*", nameof(Identifier));
 
@@ -216,6 +223,11 @@ Method:
             public bool Discrete {  get { return this.Units == "1"; } }
 
             public object UnitString { get { return Discrete ? string.Empty : Units; } }
+
+            public override string ToString()
+            {
+                return base.ToString();
+            }
         }
 
 
@@ -231,20 +243,41 @@ Method:
         private class Recipe
         {
             public string Name { get; set; }
-            public Dictionary<IngredientType, int> Ingredients { get; } = new Dictionary<IngredientType, int>();
+            public Dictionary<IngredientType, decimal> Ingredients { get; } = new Dictionary<IngredientType, decimal>();
 
             public InstructionCollection Instructions { get; } = new InstructionCollection();
 
         }
 
-        private class IngredientAmount
+        private class IngredientAmount: IComparable<IngredientAmount>
         {
             public IngredientType IngredientType { get; set; }
-            public int Amount { get; set; }
+            public decimal Amount { get; set; }
+
+            public int CompareTo(IngredientAmount other)
+            {
+                var sign = -Math.Sign(this.Amount - other.Amount);
+                if (sign != 0) { return sign; }
+
+                return string.Compare(this.IngredientType.Name, other.IngredientType.Name);
+            }
+
+            public override string ToString()
+            {
+                var ingrdientName = this.IngredientType.Discrete && this.Amount != 1.0m
+                    ? this.IngredientType.Name.Pluralize()
+                    : this.IngredientType.Name;
+                return $"{this.Amount.AsFraction()}{this.IngredientType.UnitString} {ingrdientName}";
+            }
         }
 
-        private class Container: List<IngredientAmount>
+        private class IngredientAmountCollection: List<IngredientAmount>
         {
+
+        }
+
+        private class Container: IngredientAmountCollection
+        { 
             public string Name { get; set;  }
             public Container(string name)
             {
@@ -370,8 +403,8 @@ Method:
             private void Ingredient()
             {
                 var ingredient = this.Match(Lexer.Ingredient).Content;
-                var digits = Regex.Match(ingredient, @"^\d+").Groups[0].Value;
-                var amount = int.Parse(digits, this.Culture);
+                var digits = Regex.Match(ingredient, Lexer.NumberFragmentRx).Groups[0].Value;
+                var amount = decimal.Parse(digits, this.Culture);
                 var code = ingredient.Substring(digits.Length);
 
                 IngredientType ingredientType;
@@ -388,7 +421,7 @@ Method:
 
                 this.currentIngredients.Add(ingredientAmount);
                 
-                int currentAmount = 0;
+                decimal currentAmount = 0;
                 if (this.recipe.Ingredients.TryGetValue(ingredientType, out currentAmount))
                 {
                     currentAmount += amount;
@@ -417,7 +450,7 @@ Method:
                 
                 Match(Lexer.Cl);
                 Match(Lexer.Repeat);
-                var digits = this.Match(Lexer.Digit).Content;
+                var digits = this.Match(Lexer.Number).Content;
                 var number = int.Parse(digits, this.Culture);
 
                 var repeater = new RepeatOperationsInstruction(program) { Times = number };
